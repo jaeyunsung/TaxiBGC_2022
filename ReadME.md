@@ -54,5 +54,3 @@ $ Rscript --vanilla TaxiBGC_script.R -h
 $ Rscript --vanilla $DIR/TaxiBGC_2021-main/TaxiBGC_script.R -R1 $DIR/TaxiBGC_2021-main/example/example_1.fq.gz -R2 $DIR/TaxiBGC_2021-main/example/example_2.fq.gz -o $DIR/TaxiBGC_2021-main/demo -d $DIR/TaxiBGC_2021-main/database
 
 After completion of the TaxiBGC run on the example metagenome (example_1.fq & example_2.fq), an output file 'BGCs.csv' will be generated inside $DIR/TaxiBGC_2021-main/demo.
-
-## End

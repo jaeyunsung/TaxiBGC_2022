@@ -171,5 +171,3 @@ unlink("*.bai", recursive = TRUE)
 unlink("sampleID_1", recursive = TRUE)
 unlink("sampleID_2", recursive = TRUE)
 write.csv(Step2_results,"BGCs.csv")
-
-## End

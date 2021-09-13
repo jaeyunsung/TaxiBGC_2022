@@ -1,45 +1,67 @@
 #######################################################################################
-## TaxiBGC (Taxonomy-guided Identification of Biosynthetic Gene Clusters): A computational strategy for identifying experimentally verified Biosynthetic Gene Clusters (BGCs) and inferring their annotated SMs from metagenomic shotgun sequencing data. The TaxiBGC pipeline includes three major steps: 1) species-level, taxonomic profiling on the metagenome; 2) a first-pass prediction of BGCs through querying the species (identified in the first step) in the TaxiBGC database; and 3) confirmation (in silico) of the predicted BGCs (from the second step) based on the detection of BGC genes in the metagenome.
+## TaxiBGC (Taxonomy-guided Identification of Biosynthetic Gene Clusters): A computational pipeline for identifying experimentally verified Biosynthetic Gene Clusters (BGCs) and inferring their annotated SMs from metagenomic shotgun sequencing data. 
+## The TaxiBGC pipeline includes three major steps: 
+## 1) species-level, taxonomic profiling on the metagenome; 
+## 2) a first-pass prediction of BGCs through querying the species (identified in the first step) in the TaxiBGC database; and 
+## 3) confirmation (in silico) of the predicted BGCs (from the second step) based on the detection of BGC genes in the metagenome.
 
-## Author: Utpal Bakshi, PhD
-## Date: July 29, 2021
+## Author: Utpal Bakshi, PhD and Vinod K. Gupta, PhD
+## Date: September 2021
 
-## Input: Paired-end fastq files
-## Output: "Step1_results" and "Step2_results" in R environment and 'BGC_sampleID.csv' in current working directory
-
-## Note: The unzipped "database" directory should be inside the working directory
-## Note: User needs to replace 'sampleID' (below) with the actual metagenome file name
-
-## Requirements: MetaPhlAn2, Bowtie2, SAMtools, and R library "dplyr" should be installed in the local system or server
+## Input: Paired-end fastq files (e.g., example_1.fq & example_2.fq)
+## Output:'BGCs.csv' in current working directory
 
 library(dplyr)
+library(argparse)
 
 #######################################################################################
-## Set the working directory
-setwd(".")
-dir.create("./temp")
+## 1. Parsing the arguments from the user. Asks for paired-end fastq input files, directory of the TaxiBGC background database, and directory for the TaxiBGC output files
+#######################################################################################
+parser <- ArgumentParser()
+parser$add_argument("-R1", "--R1Filename" , default=TRUE,
+                    help="Path to input forward read file in fastq format")
+parser$add_argument("-R2", "--R2Filename" , default=TRUE,
+                    help="Path to input reverse read file in fastq format")
+parser$add_argument("-o", "--directory" , default=TRUE,
+                    help="Name of output directory to be created")
+parser$add_argument("-d", "--database" , default=TRUE,
+                    help="Path to TaxiBGC databbase directory")
+args <- parser$parse_args()
+input1 <- args$R1Filename
+input2 <- args$R2Filename
+database <- args$database
+sample_name <- args$directory
+dir.create(sample_name)
+path1<-paste(" ",sample_name,'/sampleID_1',sep="")
+path2<-paste(" ",sample_name,'/sampleID_2',sep="")
+print(path1)
+system(paste('cp ', input1,path1))
+system(paste('cp ', input2,path2))
 
 #######################################################################################
-## 1. Running MetaPhlAn2 on metagenome
+## 2. Running MetaPhlAn2 on metagenome
 #######################################################################################
-system('metaphlan2.py sampleID_1.fastq.gz,sampleID_2.fastq.gz --bowtie2out ./temp/sampleID.bowtie2.bz2 --input_type fastq > ./temp/MetaPhlAn2.txt')
+setwd(sample_name)
+dir.create("temp")
+system('metaphlan sampleID_1,sampleID_2 --bowtie2out temp/sampleID.bowtie2.bz2 --input_type fastq > temp/MetaPhlAn2_raw.txt')
 
 #######################################################################################
-## 2. Generating species abundance matrix from MetaPhlAn2 output
+## 3. Generating species abundance matrix from MetaPhlAn2 output
 #######################################################################################
 setwd("./temp")
+system('awk -F"\t" \'/__|clade_name/ {print $1"\t"$3}\' example.tsv > MetaPhlAn2.txt')
 system('grep -E \"(s__)|(^ID)\" MetaPhlAn2.txt | grep -v \"t__\" | sed \'s/^.*s__//g\' > ./Species_MetaPhlAn2.txt')
 system('awk \'NR==1 { print \"#SampleID\", FILENAME }; 1\' \"Species_MetaPhlAn2.txt\" > temp && mv temp \"Species_MetaPhlAn2_with_header.txt\"') # Adding filenames in file header
 
 #######################################################################################
-## 3. Analysis of MetaPhlAn2 output
+## 4. Analysis of MetaPhlAn2 output
 #######################################################################################
 df <- read.csv('Species_MetaPhlAn2_with_header.txt', header= TRUE, sep = "\t",  check.names = F, row.names = 1)
 df1 <- cbind(rownames(df), data.frame(df, row.names=NULL))
 remove <- c('noname_', 'unclassified','virus') ##  remove 
 modified_df1 <- df1[ !grepl(paste(remove, collapse="|"), df1$`rownames(df)`),]
 modified_df1 <- data.frame(modified_df1[,-1], row.names = modified_df1[,1])
-df2<-sweep(modified_df1,2,colSums(modified_df1),'/')# re-normalize, sum is 1 not 100 
+df2<-sweep(modified_df1,2,colSums(modified_df1),'/') # re-normalize, sum of a sample's relative abundances becomes 1
 df2[is.na(df2)] <- 0
 df2[df2 < 0.00001] <- 0 # criteria for species being present is >= 0.001% 
 df3 <- cbind(rownames(df2), data.frame(df2, row.names=NULL))
@@ -47,9 +69,9 @@ colnames(df3) <- c("Species_name","Abundance")
 df4 <- df3[df3$Abundance != 0, ]
 
 #######################################################################################
-## 4. Overlap with background database Step1
+## 5. Overlap with background database Step1
 #######################################################################################
-genome_file <- read.csv('./../database/TaxiBGC_database.csv', header= TRUE, sep = ",", check.names = F)
+genome_file <- read.csv(file.path(database,"TaxiBGC_database.csv"), header= TRUE, sep = ",", check.names = F)
 df2_match<-merge(as.data.frame(df4),as.data.frame(genome_file), by.x = 'Species_name',by.y = 'Species_name', all=F)
 df2_bT2<-df2_match[, colSums(df2_match != 0) > 0] # remove all blank samples
 ## To get step 1 results
@@ -60,33 +82,35 @@ Step1_results<- data.frame(subset(products_final, select = -c(products)))
 Step1_results <- subset(Step1_results, select = -c(Abundance, Similarity))
 
 #######################################################################################
-## 5. Fetch BGCs
+## 6. Fetch BGCs
 #######################################################################################
 bgc_name <- data.frame(unique(Step1_results$BGC_Accession))
 write.table(bgc_name, file = "bgc_name.txt", quote=FALSE, row.names = FALSE, col.names=FALSE)
 
 #######################################################################################
-## 6. Preparing files for bowtie2
+## 7. Preparing files for bowtie2
 #######################################################################################
 dir.create ("./temp2")
 system('find . -type f ! -name \'bgc_name.txt\' -delete')
 ### Copy bgc fasta 
-system('cp ./../database/bgc_fasta/* .')
+BGC_fasta_path<-file.path(database,"bgc_fasta","*")
+
+system(paste('cp ',BGC_fasta_path,' .'))
 system('for file in *.txt; do xargs < $file cat > ./temp2/$file; done')
 file.copy("./temp2/bgc_name.txt", "./../")
 setwd("./..")
 
 #######################################################################################
-## 7. Running bowtie2 
+## 8. Running bowtie2 
 #######################################################################################
 system('bowtie2-build bgc_name.txt bgc_seq')
-system('bowtie2 -x bgc_seq -1 sampleID_1.fastq.gz -2 sampleID_2.fastq.gz > bgc_seq.bam')
+system('bowtie2 -x bgc_seq -1 sampleID_1 -2 sampleID_2 > bgc_seq.bam')
 system('samtools sort -o sorted.bam bgc_seq.bam')
 system('samtools index sorted.bam')
 system('samtools idxstats sorted.bam > ./temp/bgc_idxstats.txt')
 
 #######################################################################################
-## 8. Cleaning bowtie2 results
+## 9. Cleaning bowtie2 results
 #######################################################################################
 setwd("./temp")
 system('awk \'{ print $1, $2, $3 + $4; }\' bgc_idxstats.txt > bgc_idxstats.fasta') # Idxstats to count
@@ -97,9 +121,8 @@ system('awk \'{print $1 \" \" $3}\' bgc_idxstats4.txt > bgc_idxstats5.txt') # Re
 system('find . -type f ! -name \'bgc_idxstats5.txt\' -delete')
 
 #######################################################################################
-## 9. Processing of bowtie2 results
+## 10. Processing of bowtie2 results
 #######################################################################################
-library(dplyr)
 filenames <- list.files(full.names=F, pattern=".txt")
 output <-lapply(filenames,function(i){
   t<-read.csv(i, header=T, check.names = F, sep = " ")
@@ -121,7 +144,7 @@ Step2_results2_20<-do.call(rbind,output)
 Step2_results2_20<-subset(Step2_results2_20, BGC_name!="*")
 
 #######################################################################################
-## 10. Rearrange the output files
+## 11. Rearrange the output files
 #######################################################################################
 Step2_results2_20[,1] <- data.frame(gsub("_idxstats.txt.*$", "", Step2_results2_20[,1]))
 Step2_results_20_matrix <-tidyr::pivot_wider(Step2_results2_20, names_from = Sample, values_from = BGCs_step2_20_percent)
@@ -136,7 +159,7 @@ Step2_results<-merge(as.data.frame(Step2_results_20_matrix),as.data.frame(Step1_
 colnames(Step2_results)[1] <- "BGC_Accession"
 
 #######################################################################################
-## 11. Final clean-up
+## 12. Final clean-up
 #######################################################################################
 setwd("./..")
 unlink("temp", recursive = TRUE)
@@ -145,4 +168,8 @@ unlink("*.bam", recursive = TRUE)
 unlink("*.sh", recursive = TRUE)
 unlink("*.txt", recursive = TRUE)
 unlink("*.bai", recursive = TRUE)
-write.csv(Step2_results,"BGCs_sampleID.csv")
+unlink("sampleID_1", recursive = TRUE)
+unlink("sampleID_2", recursive = TRUE)
+write.csv(Step2_results,"BGCs.csv")
+
+## End

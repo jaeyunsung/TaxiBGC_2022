@@ -57,6 +57,16 @@ def main():
     parser.add_argument(
         "-o", "--output", required=True, help="prefix for output file names", type=str
     )
+    parser.add_argument(
+        "-g", "--BGC_gene_presence_threshold", required=False, const=5, 
+        help="gene-presence threshold for predicting BGCs from the metagenomes", 
+        type=int
+    )
+    parser.add_argument(
+        "-b", "--BGC_coverage_threshold", required=False, const=10, 
+        help="coverage threshold for predicting BGCs from the metagenomes", 
+        type=int
+    )
 
     if len(sys.argv) == 1:
         parser.print_help()

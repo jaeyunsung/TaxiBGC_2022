@@ -27,7 +27,11 @@ def run(args):
     "-t",
     utils.DEFAULT_DB_FOLDER + "/",
     "-o",
-    args.output
+    args.output,
+    "-g",
+    str(args.BGC_gene_presence_threshold),
+    "-b",
+    str(args.BGC_coverage_threshold)
   ])
 
   # cleanup

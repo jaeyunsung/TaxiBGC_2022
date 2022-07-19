@@ -1,0 +1,28 @@
+{% set name = "taxibgc" %}
+{% set version = "1.0" %}
+
+package:
+  name: "{{ name }}"
+  version: "{{ version }}"
+
+source:
+  path: ..
+
+requirements:
+  host:
+    - pip
+    - python
+  run:
+    - python
+    - bbmap
+    - bowtie2
+    - metaphlan
+
+test:
+
+about:
+  home: https://github.com/danielchang2002/TaxiBGC
+  license: MIT
+  license_family: MIT
+  summary: Taxonomy-guided Identification of Biosynthetic Gene Clusters
+
